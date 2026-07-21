@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOUCHTRACE — Switchboard Field Scan</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --bg: #14171a;
+    --panel: #1c2024;
+    --panel-2: #23282d;
+    --hazard: #f2c94c;
+    --hazard-dim: #7a6626;
+    --danger: #e0523f;
+    --safe: #52c9a8;
+    --text: #ececea;
+    --text-dim: #9aa0a6;
+    --line: #33393f;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      repeating-linear-gradient(135deg, rgba(242,201,76,0.03) 0px, rgba(242,201,76,0.03) 2px, transparent 2px, transparent 14px),
+      var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Sans', sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:640px;margin:0 auto;padding:20px 16px 60px;}
+
+  header{
+    display:flex;align-items:center;gap:12px;
+    padding:14px 0 16px;
+    border-bottom:2px solid var(--hazard);
+    margin-bottom:16px;
+  }
+  .bolt{width:32px;height:32px;flex:none;color:var(--hazard);}
+  h1{
+    font-family:'Oswald', sans-serif;font-weight:700;font-size:21px;
+    letter-spacing:0.04em;margin:0;text-transform:uppercase;
+  }
+  .sub{
+    font-size:10.5px;letter-spacing:0.1em;color:var(--text-dim);
+    text-transform:uppercase;margin-top:2px;font-family:'IBM Plex Mono', monospace;
+  }
+
+  /* tabs */
+  .tabs{display:flex;gap:2px;margin-bottom:18px;background:var(--panel-2);border-radius:6px;padding:3px;}
+  .tab{
+    flex:1;text-align:center;padding:9px 6px;
+    font-family:'Oswald', sans-serif;font-size:12.5px;letter-spacing:0.05em;
+    text-transform:uppercase;font-weight:600;color:var(--text-dim);
+    border-radius:4px;cursor:pointer;transition:all .15s;
+  }
+  .tab.active{background:var(--hazard);color:#1a1a1a;}
+
+  .view{display:none;}
+  .view.active{display:block;}
+
+  .disclaimer{
+    background:var(--panel-2);border-left:3px solid var(--hazard);
+    padding:11px 13px;font-size:12px;line-height:1.5;color:var(--text-dim);
+    margin-bottom:18px;border-radius:2px;
+  }
+  .disclaimer b{color:var(--hazard);font-weight:600;}
+
+  .field-group{margin-bottom:12px;}
+  .field-label{
+    font-family:'IBM Plex Mono', monospace;font-size:10px;letter-spacing:0.08em;
+    text-transform:uppercase;color:var(--text-dim);margin-bottom:5px;display:block;
+  }
+  input[type=text], textarea{
+    width:100%;background:var(--panel);border:1px solid var(--line);
+    color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:14px;
+    padding:10px 11px;border-radius:4px;outline:none;
+  }
+  input[type=text]:focus, textarea:focus{border-color:var(--hazard);}
+  .field-row{display:flex;gap:10px;}
+  .field-row .field-group{flex:1;}
+
+  .capture-zone{
+    border:2px dashed var(--line);border-radius:6px;background:var(--panel);
+    padding:24px 16px;text-align:center;transition:border-color .2s;margin-top:6px;
+  }
+  .capture-hint{font-size:11.5px;color:var(--text-dim);}
+  .capture-icon{color:var(--text-dim);margin-bottom:8px;}
+  .capture-label{font-family:'Oswald', sans-serif;font-size:14px;letter-spacing:0.03em;text-transform:uppercase;color:var(--text);margin-bottom:3px;}
+
+  .photo-grid{
+    display:grid;grid-template-columns:repeat(2, 1fr);gap:10px;margin-top:6px;
+  }
+  .photo-card{
+    position:relative;border-radius:6px;overflow:hidden;border:1px solid var(--line);
+    background:var(--panel);aspect-ratio:4/3;
+  }
+  .photo-card img{width:100%;height:100%;object-fit:cover;display:block;}
+  .photo-chip{
+    position:absolute;top:6px;left:6px;
+    font-family:'IBM Plex Mono', monospace;font-size:9.5px;letter-spacing:0.06em;
+    text-transform:uppercase;padding:3px 7px;border-radius:3px;font-weight:600;
+  }
+  .photo-chip.external{background:var(--hazard);color:#1a1a1a;}
+  .photo-chip.internal{background:var(--safe);color:#0d211c;}
+  .photo-remove{
+    position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;
+    background:rgba(20,23,26,0.85);color:var(--text);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-size:13px;line-height:1;
+    cursor:pointer;padding:0;flex:none;
+  }
+  .photo-add-tile{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+    border:2px dashed var(--line);border-radius:6px;aspect-ratio:4/3;cursor:pointer;
+    color:var(--text-dim);font-family:'Oswald',sans-serif;font-size:11.5px;
+    letter-spacing:0.04em;text-transform:uppercase;text-align:center;padding:8px;
+    transition:border-color .15s, color .15s;
+  }
+  .photo-add-tile:hover{border-color:var(--hazard);color:var(--hazard);}
+  .photo-add-tile svg{width:20px;height:20px;}
+  .photo-count-note{font-size:11px;color:var(--text-dim);margin-top:8px;font-family:'IBM Plex Mono',monospace;}
+
+  .btn-row{display:flex;gap:10px;margin-top:14px;}
+  button{
+    font-family:'Oswald', sans-serif;font-size:13.5px;letter-spacing:0.05em;
+    text-transform:uppercase;font-weight:600;border:none;border-radius:4px;
+    padding:12px 14px;cursor:pointer;flex:1;transition:transform .1s, filter .15s;
+  }
+  button:active{transform:scale(0.98);}
+  .btn-primary{background:var(--hazard);color:#1a1a1a;}
+  .btn-primary:hover{filter:brightness(1.08);}
+  .btn-secondary{background:transparent;color:var(--text-dim);border:1px solid var(--line);}
+  .btn-secondary:hover{color:var(--text);border-color:var(--text-dim);}
+  .btn-danger{background:transparent;color:var(--danger);border:1px solid var(--danger);}
+  button:disabled{opacity:0.4;cursor:not-allowed;}
+
+  input[type=file]{display:none;}
+
+  .scanning{
+    display:flex;align-items:center;justify-content:center;gap:10px;padding:20px 0;
+    color:var(--hazard);font-family:'IBM Plex Mono', monospace;font-size:12.5px;
+    letter-spacing:0.06em;text-transform:uppercase;
+  }
+  .spinner{width:15px;height:15px;border-radius:50%;border:2px solid var(--hazard-dim);border-top-color:var(--hazard);animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .tag{margin-top:20px;background:var(--panel);border-radius:6px;border:1px solid var(--line);overflow:hidden;}
+  .tag-head{padding:14px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:8px;}
+  .risk-badge{font-family:'Oswald', sans-serif;font-weight:700;font-size:12.5px;letter-spacing:0.06em;text-transform:uppercase;padding:6px 11px;border-radius:3px;}
+  .risk-high{background:var(--danger);color:#fff;}
+  .risk-elevated{background:var(--hazard);color:#1a1a1a;}
+  .risk-low{background:var(--safe);color:#0d211c;}
+  .stamp{font-family:'IBM Plex Mono', monospace;font-size:10px;color:var(--text-dim);letter-spacing:0.05em;}
+
+  .tag-body{padding:14px 16px 18px;}
+  .summary{font-size:13.5px;line-height:1.6;margin:0 0 14px;color:var(--text);}
+  .section-label{font-family:'IBM Plex Mono', monospace;font-size:10px;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-dim);margin:0 0 9px;padding-bottom:5px;border-bottom:1px solid var(--line);}
+
+  .finding{display:flex;gap:9px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px;line-height:1.5;}
+  .finding:last-child{border-bottom:none;}
+  .fdot{flex:none;width:8px;height:8px;border-radius:50%;margin-top:5px;}
+  .fdot.high{background:var(--danger);}
+  .fdot.elevated{background:var(--hazard);}
+  .fdot.note{background:var(--text-dim);}
+  .finding-tag{font-family:'IBM Plex Mono', monospace;font-size:10px;color:var(--text-dim);text-transform:uppercase;margin-right:6px;}
+
+  .cta-strip{margin-top:14px;background:var(--panel-2);border-radius:4px;padding:11px 13px;font-size:12px;color:var(--text-dim);line-height:1.5;}
+  .cta-strip b{color:var(--hazard);}
+
+  .error-box{margin-top:16px;background:#2a1a18;border:1px solid var(--danger);border-radius:4px;padding:11px 13px;font-size:12.5px;color:#f0b3a8;}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--hazard);color:#1a1a1a;padding:10px 18px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.05em;text-transform:uppercase;opacity:0;transition:opacity .2s;pointer-events:none;z-index:50;}
+  .toast.show{opacity:1;}
+
+  /* log view */
+  .log-toolbar{display:flex;gap:10px;margin-bottom:14px;}
+  .log-toolbar input[type=text]{flex:1;}
+  .log-empty{text-align:center;color:var(--text-dim);font-size:13px;padding:40px 10px;font-family:'IBM Plex Mono',monospace;}
+  .log-entry{
+    background:var(--panel);border:1px solid var(--line);border-radius:6px;
+    padding:13px 14px;margin-bottom:10px;cursor:pointer;
+  }
+  .log-entry-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+  .log-entry-title{font-family:'Oswald',sans-serif;font-size:14px;text-transform:uppercase;letter-spacing:0.02em;}
+  .log-entry-meta{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-dim);margin-top:3px;}
+  .log-entry-summary{font-size:12.5px;color:var(--text-dim);margin-top:8px;line-height:1.5;}
+  .log-entry-expand{margin-top:12px;border-top:1px solid var(--line);padding-top:12px;display:none;}
+  .log-entry.expanded .log-entry-expand{display:block;}
+  .log-entry img{width:100%;border-radius:4px;display:block;}
+  .log-photo-gallery{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px;}
+  .log-photo-item{position:relative;border-radius:4px;overflow:hidden;aspect-ratio:4/3;}
+  .log-photo-item img{width:100%;height:100%;object-fit:cover;}
+  .log-entry-actions{display:flex;gap:8px;margin-top:10px;}
+  .log-entry-actions button{padding:9px 10px;font-size:12px;}
+
+  footer{margin-top:30px;text-align:center;font-family:'IBM Plex Mono', monospace;font-size:10px;letter-spacing:0.07em;color:var(--text-dim);text-transform:uppercase;opacity:0.55;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <svg class="bolt" viewBox="0 0 200 200" width="32" height="32">
+      <path d="M 58 116 A 26 26 0 0 1 84 142" fill="none" stroke="#f2c94c" stroke-width="9" stroke-linecap="round" opacity="0.95"/>
+      <path d="M 58 96 A 46 46 0 0 1 104 142" fill="none" stroke="#f2c94c" stroke-width="9" stroke-linecap="round" opacity="0.6"/>
+      <path d="M 58 76 A 66 66 0 0 1 124 142" fill="none" stroke="#f2c94c" stroke-width="9" stroke-linecap="round" opacity="0.3"/>
+      <polyline points="58,142 92,108 78,100 118,58 104,52 146,18" fill="none" stroke="#52c9a8" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="58" cy="142" r="11" fill="#f2c94c"/>
+    </svg>
+    <div>
+      <h1>Touchtrace</h1>
+      <div class="sub">Switchboard field scan · AS/NZS 3000 reference</div>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" data-view="scanView">New Scan</div>
+    <div class="tab" data-view="logView">Inspection Log <span id="logCount"></span></div>
+  </div>
+
+  <!-- SCAN VIEW -->
+  <div class="view active" id="scanView">
+    <div class="disclaimer">
+      <b>Visual triage, not a test result.</b> Add external (enclosure closed) and internal (enclosure open) photos of the same board — readings against AS/NZS 3000 still need to be confirmed with your test instruments and judgement before sign-off. This flags what's visible across the photos for your own inspection record.
+    </div>
+
+    <div class="field-row">
+      <div class="field-group">
+        <label class="field-label">Job / Site Ref</label>
+        <input type="text" id="jobRef" placeholder="e.g. WO-4471">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Board / Location</label>
+        <input type="text" id="boardId" placeholder="e.g. Main SB, garage">
+      </div>
+    </div>
+    <div class="field-group">
+      <label class="field-label">Inspector</label>
+      <input type="text" id="inspector" placeholder="Name / licence no.">
+    </div>
+
+    <div id="captureZone" class="capture-zone">
+      <svg class="capture-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+        <circle cx="12" cy="13" r="4"></circle>
+      </svg>
+      <div class="capture-label">Add switchboard photos</div>
+      <div class="capture-hint">Isolate per your procedure before opening enclosure</div>
+    </div>
+
+    <div class="photo-grid" id="photoGrid" style="display:none;"></div>
+    <div class="photo-count-note" id="photoCountNote" style="display:none;"></div>
+
+    <div class="btn-row" id="btnRow">
+      <button class="btn-primary" id="addExternalBtn">Add External</button>
+      <button class="btn-secondary" id="addInternalBtn">Add Internal</button>
+    </div>
+    <div class="btn-row" id="uploadRow">
+      <button class="btn-secondary" id="uploadBtn" style="flex:1;">Upload from Library</button>
+    </div>
+    <input type="file" id="cameraInput" accept="image/*" capture="environment">
+    <input type="file" id="fileInput" accept="image/*">
+
+    <div id="analyzeRow" class="btn-row" style="display:none;">
+      <button class="btn-primary" id="analyzeBtn">Scan Photos</button>
+      <button class="btn-secondary" id="clearAllBtn">Clear All</button>
+    </div>
+
+    <div id="scanningBox" style="display:none;" class="scanning">
+      <div class="spinner"></div><span>Reading photos against AS/NZS 3000 checklist…</span>
+    </div>
+
+    <div id="errorBox" style="display:none;" class="error-box"></div>
+    <div id="debugRow" style="margin-top:10px;">
+      <button class="btn-secondary" id="testConnBtn" style="width:100%;">Test API Connection (no image)</button>
+    </div>
+
+    <div id="resultTag" style="display:none;"></div>
+
+    <div class="btn-row" id="saveRow" style="display:none;">
+      <button class="btn-primary" id="saveEntryBtn">Save to Log</button>
+      <button class="btn-secondary" id="discardBtn">New Scan</button>
+    </div>
+  </div>
+
+  <!-- LOG VIEW -->
+  <div class="view" id="logView">
+    <div class="log-toolbar">
+      <input type="text" id="logSearch" placeholder="Filter by job ref, board, or inspector">
+      <button class="btn-secondary" id="exportAllBtn" style="flex:none;padding:9px 12px;">Export</button>
+    </div>
+    <div id="logList"></div>
+  </div>
+
+  <footer>Field tool · confirm all findings against test instrument readings before sign-off</footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------- standalone storage shim (replaces Claude-artifact window.storage) ----------
+// Data persists in this browser only, per device. For true cross-device sync you'd
+// need a real backend — this keeps the same call shape so the rest of the app is unchanged.
+const localStore = {
+  async get(key){
+    const raw = localStorage.getItem('tt:' + key);
+    if(raw === null) return null;
+    return { key, value: raw };
+  },
+  async set(key, value){
+    localStorage.setItem('tt:' + key, value);
+    return { key, value };
+  },
+  async delete(key){
+    localStorage.removeItem('tt:' + key);
+    return { key, deleted: true };
+  }
+};
+
+// ---------- proxy config (app talks to YOUR server, which holds the real Anthropic key) ----------
+const PROXY_URL_STORAGE = 'tt:proxy-url';
+const APP_TOKEN_STORAGE = 'tt:app-token';
+function getProxyUrl(){ return localStorage.getItem(PROXY_URL_STORAGE) || ''; }
+function getAppToken(){ return localStorage.getItem(APP_TOKEN_STORAGE) || ''; }
+function setProxyConfig(url, token){
+  localStorage.setItem(PROXY_URL_STORAGE, url);
+  localStorage.setItem(APP_TOKEN_STORAGE, token);
+}
+
+function ensureApiKeyBanner(){
+  if(getProxyUrl() && getAppToken()) return;
+  const banner = document.createElement('div');
+  banner.id = 'apiKeyBanner';
+  banner.style.cssText = 'position:fixed;inset:0;background:rgba(10,12,14,0.92);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;';
+  banner.innerHTML = `
+    <div style="max-width:420px;background:#1c2024;border:1px solid #33393f;border-radius:8px;padding:22px;">
+      <div style="font-family:'Oswald',sans-serif;font-size:17px;color:#f2c94c;text-transform:uppercase;letter-spacing:0.03em;margin-bottom:10px;">Connect to Your Team's Server</div>
+      <div style="font-size:13px;line-height:1.6;color:#9aa0a6;margin-bottom:14px;">
+        This app calls your own proxy server, not Anthropic directly — your real API key stays on that server, never in this browser. Ask whoever set up TouchTrace for your team for these two values.
+      </div>
+      <label style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#9aa0a6;display:block;margin-bottom:5px;">Proxy URL</label>
+      <input type="text" id="proxyUrlInput" placeholder="https://your-proxy.vercel.app/api/scan" style="width:100%;background:#14171a;border:1px solid #33393f;color:#ececea;padding:10px 11px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:13px;margin-bottom:10px;box-sizing:border-box;">
+      <label style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#9aa0a6;display:block;margin-bottom:5px;">Access Token</label>
+      <input type="text" id="appTokenInput" placeholder="shared team access token" style="width:100%;background:#14171a;border:1px solid #33393f;color:#ececea;padding:10px 11px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:13px;margin-bottom:12px;box-sizing:border-box;">
+      <button id="apiKeySaveBtn" style="width:100%;background:#f2c94c;color:#1a1a1a;border:none;border-radius:4px;padding:12px;font-family:'Oswald',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;">Save</button>
+    </div>
+  `;
+  document.body.appendChild(banner);
+  document.getElementById('apiKeySaveBtn').onclick = () => {
+    const url = document.getElementById('proxyUrlInput').value.trim();
+    const token = document.getElementById('appTokenInput').value.trim();
+    if(!url || !token) return;
+    setProxyConfig(url, token);
+    banner.remove();
+  };
+}
+ensureApiKeyBanner();
+
+const STORAGE_KEY = 'inspection-entries';
+const DEFAULTS_KEY = 'field-defaults';
+
+// ---------- tabs ----------
+document.querySelectorAll('.tab').forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById(t.dataset.view).classList.add('active');
+    if(t.dataset.view === 'logView') renderLog();
+  };
+});
+
+// ---------- field defaults (remember inspector name) ----------
+async function loadDefaults(){
+  try{
+    const res = await localStore.get(DEFAULTS_KEY);
+    if(res && res.value){
+      const d = JSON.parse(res.value);
+      if(d.inspector) document.getElementById('inspector').value = d.inspector;
+    }
+  }catch(e){ /* no defaults yet */ }
+}
+async function saveDefaults(){
+  try{
+    await localStore.set(DEFAULTS_KEY, JSON.stringify({inspector: document.getElementById('inspector').value}));
+  }catch(e){}
+}
+loadDefaults();
+
+// ---------- capture ----------
+const captureZone = document.getElementById('captureZone');
+const photoGrid = document.getElementById('photoGrid');
+const photoCountNote = document.getElementById('photoCountNote');
+const btnRow = document.getElementById('btnRow');
+const uploadRow = document.getElementById('uploadRow');
+const analyzeRow = document.getElementById('analyzeRow');
+const cameraInput = document.getElementById('cameraInput');
+const fileInput = document.getElementById('fileInput');
+const analyzeBtn = document.getElementById('analyzeBtn');
+const clearAllBtn = document.getElementById('clearAllBtn');
+const scanningBox = document.getElementById('scanningBox');
+const errorBox = document.getElementById('errorBox');
+const resultTag = document.getElementById('resultTag');
+const saveRow = document.getElementById('saveRow');
+const saveEntryBtn = document.getElementById('saveEntryBtn');
+const discardBtn = document.getElementById('discardBtn');
+
+let photos = []; // { id, label: 'external'|'internal'|'other', dataUrl, base64, mediaType }
+let pendingLabel = 'other';
+let lastResult = null;
+
+document.getElementById('addExternalBtn').onclick = () => { pendingLabel = 'external'; cameraInput.click(); };
+document.getElementById('addInternalBtn').onclick = () => { pendingLabel = 'internal'; cameraInput.click(); };
+document.getElementById('uploadBtn').onclick = () => { pendingLabel = 'other'; fileInput.click(); };
+cameraInput.onchange = e => handleFile(e.target.files[0]);
+fileInput.onchange = e => handleFile(e.target.files[0]);
+clearAllBtn.onclick = resetCapture;
+discardBtn.onclick = () => { resetCapture(); resetFormFields(false); };
+
+function resetFormFields(clearInspector){
+  document.getElementById('jobRef').value = '';
+  document.getElementById('boardId').value = '';
+  if(clearInspector) document.getElementById('inspector').value = '';
+}
+
+function resetCapture(){
+  photos = [];
+  lastResult = null;
+  renderPhotoGrid();
+  scanningBox.style.display = 'none';
+  errorBox.style.display = 'none';
+  resultTag.style.display = 'none';
+  saveRow.style.display = 'none';
+  cameraInput.value = '';
+  fileInput.value = '';
+}
+
+function handleFile(file){
+  if(!file) return;
+  const label = pendingLabel;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 700;
+      const scale = Math.min(1, maxW / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.62);
+
+      photos.push({
+        id: 'p' + Date.now() + Math.random().toString(36).slice(2,6),
+        label,
+        dataUrl,
+        base64: dataUrl.split(',')[1],
+        mediaType: 'image/jpeg'
+      });
+
+      errorBox.style.display = 'none';
+      resultTag.style.display = 'none';
+      saveRow.style.display = 'none';
+      renderPhotoGrid();
+    };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+  cameraInput.value = '';
+  fileInput.value = '';
+}
+
+function removePhoto(id){
+  photos = photos.filter(p => p.id !== id);
+  renderPhotoGrid();
+}
+
+function renderPhotoGrid(){
+  if(!photos.length){
+    captureZone.style.display = 'block';
+    photoGrid.style.display = 'none';
+    photoCountNote.style.display = 'none';
+    analyzeRow.style.display = 'none';
+    return;
+  }
+  captureZone.style.display = 'none';
+  photoGrid.style.display = 'grid';
+  photoCountNote.style.display = 'block';
+  analyzeRow.style.display = 'flex';
+
+  const extCount = photos.filter(p => p.label === 'external').length;
+  const intCount = photos.filter(p => p.label === 'internal').length;
+  photoCountNote.textContent = `${photos.length} photo${photos.length>1?'s':''} added — ${extCount} external, ${intCount} internal${photos.length - extCount - intCount ? `, ${photos.length - extCount - intCount} unlabelled` : ''}`;
+
+  photoGrid.innerHTML = photos.map(p => `
+    <div class="photo-card">
+      <img src="${p.dataUrl}" alt="${p.label} switchboard photo">
+      ${p.label !== 'other' ? `<span class="photo-chip ${p.label}">${p.label}</span>` : ''}
+      <button class="photo-remove" data-id="${p.id}" type="button">×</button>
+    </div>
+  `).join('') + `
+    <div class="photo-add-tile" id="addMoreTile">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      Add More
+    </div>
+  `;
+
+  photoGrid.querySelectorAll('.photo-remove').forEach(btn => {
+    btn.onclick = () => removePhoto(btn.dataset.id);
+  });
+  const addMore = document.getElementById('addMoreTile');
+  if(addMore) addMore.onclick = () => { pendingLabel = 'other'; fileInput.click(); };
+}
+renderPhotoGrid();
+
+document.getElementById('testConnBtn').onclick = async () => {
+  const btn = document.getElementById('testConnBtn');
+  const box = document.getElementById('errorBox');
+  btn.disabled = true;
+  btn.textContent = 'Testing…';
+  box.style.display = 'none';
+  try {
+    const response = await fetch(getProxyUrl(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-app-token": getAppToken()
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-5",
+        max_tokens: 20,
+        messages: [{ role: "user", content: "Reply with the single word: OK" }]
+      })
+    });
+    const raw = await response.text();
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch(e){ parsed = null; }
+
+    box.style.display = 'block';
+    if(response.ok && parsed && parsed.content){
+      const reply = parsed.content.map(b => b.text || '').join('');
+      box.style.background = '#182a1f';
+      box.style.borderColor = 'var(--safe)';
+      box.style.color = '#a8e6cf';
+      box.textContent = `Connection OK (HTTP ${response.status}). Model replied: "${reply.trim()}". So the API connection itself works — the image-scan failure is likely about payload size or the JSON schema, not connectivity. Try scanning again, or try a smaller photo.`;
+    } else {
+      box.style.background = '#2a1a18';
+      box.style.borderColor = 'var(--danger)';
+      box.style.color = '#f0b3a8';
+      const detail = parsed ? JSON.stringify(parsed) : raw.slice(0, 300);
+      box.textContent = `Connection test failed (HTTP ${response.status}). Raw response: ${detail}`;
+    }
+  } catch(err) {
+    box.style.display = 'block';
+    box.style.background = '#2a1a18';
+    box.style.borderColor = 'var(--danger)';
+    box.style.color = '#f0b3a8';
+    box.textContent = `Connection test threw an error: ${err.message}. This points to a network/fetch-level problem rather than the API itself.`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Test API Connection (no image)';
+  }
+};
+
+analyzeBtn.onclick = async () => {
+  if(!photos.length) return;
+  analyzeRow.style.display = 'none';
+  scanningBox.style.display = 'flex';
+  errorBox.style.display = 'none';
+  resultTag.style.display = 'none';
+  saveRow.style.display = 'none';
+
+  const systemPrompt = `You are assisting a licensed electrician doing a field visual check of a switchboard, referencing AS/NZS 3000 (Australia/New Zealand Wiring Rules). You may be given multiple photos of the same board — some external (enclosure closed, labelling, signage, mounting, environment) and some internal (enclosure open, showing busbars, earth bar, wiring, protection devices). Treat them as views of the same board and synthesize a single assessment across all of them, noting which specific photo(s) support each finding when it's clear (e.g. "external photo" or "internal photo"). The electrician is competent and may have isolated and opened the enclosure themselves — do not tell them not to touch it or to call an electrician, they are the electrician. Your job is to flag visible indicators relevant to categories AS/NZS 3000 cares about for shock protection and touch-voltage risk, so they can decide what to verify with test instruments. You are not measuring anything — no meter data available, this is visual only.
+
+Assess against these categories where visible across the supplied photos:
+- Earthing & bonding: main earthing conductor connection, earth bar condition (corrosion, looseness, undersized/damaged conductors), bonding of exposed conductive parts, continuity concerns suggested by visible damage.
+- Enclosure integrity: damage, missing covers/knockouts, enclosure suitability (IP rating) for the apparent location (e.g. outdoor/damp area with an indoor-rated enclosure), unsecured doors.
+- Protection devices: presence/absence of visible RCD/RCBO protection, evidence of protection device condition (scorching, age, non-standard devices), missing or illegible circuit labelling/schedule.
+- Segregation & wiring practice: separation of active parts from accessible metal, signs of non-compliant DIY additions, undersized or unapproved cabling, exposed conductors.
+- Signage & labelling: danger/warning signage where AS/NZS 3000 would expect it, main switch identification, circuit schedule presence/legibility.
+- Environmental: corrosion, moisture ingress, evidence of overheating (scorch marks, melted insulation), pest/vermin ingress signs.
+
+Respond ONLY with strict JSON, no markdown fences, no preamble, in this exact shape:
+{
+  "risk_level": "high" | "elevated" | "low",
+  "summary": "1-2 sentence professional summary synthesizing all supplied photos and the overall picture",
+  "findings": [
+    {"severity": "high" | "elevated" | "note", "category": "short category label e.g. Earthing/Bonding", "text": "specific observation, phrased for a field note, mentioning external/internal photo if relevant"}
+  ],
+  "image_quality_note": "string or null — note if any photo is too unclear/distant/obstructed to assess a category well, or if internal views are missing so internal categories couldn't be assessed"
+}
+
+risk_level guidance: "high" = exposed live/active parts, direct evidence of earthing/bonding failure, scorching/melting, or enclosure breach exposing internals — items that would stop safe work until isolated/rectified. "elevated" = degraded conditions (corrosion, missing labelling, questionable segregation, uncertain RCD coverage) that need instrument verification before sign-off but show no direct exposure. "low" = enclosure and visible components appear intact and orderly, nothing prompts immediate concern. If only external photos were supplied, say in image_quality_note that internal categories (earthing/bonding detail, segregation, protection devices) couldn't be fully assessed without an internal view, and lean toward "elevated" rather than "low" if internal condition is materially unknown.
+Findings: 1-8 items, each tagged with a category. If nothing notable, return one "note" finding stating no visible indicators were found, and that this doesn't replace earth loop impedance/RCD trip time/insulation resistance testing.`;
+
+  const imageContent = [];
+  photos.forEach(p => {
+    const labelText = p.label === 'external' ? 'External view:' : (p.label === 'internal' ? 'Internal view:' : 'Photo:');
+    imageContent.push({ type: 'text', text: labelText });
+    imageContent.push({ type: 'image', source: { type: 'base64', media_type: p.mediaType, data: p.base64 } });
+  });
+  imageContent.push({ type: 'text', text: 'Analyze these switchboard photos together against the AS/NZS 3000 checklist categories. Respond with the JSON only.' });
+
+  async function callApi(){
+    const response = await fetch(getProxyUrl(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-app-token": getAppToken()
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-5",
+        max_tokens: 1300,
+        system: systemPrompt,
+        messages: [
+          { role: "user", content: imageContent }
+        ]
+      })
+    });
+
+    let data;
+    try { data = await response.json(); }
+    catch(e){ throw new Error(`Server returned an unreadable response (HTTP ${response.status}).`); }
+
+    if(!response.ok){
+      const apiMsg = (data && data.error && data.error.message) ? data.error.message : JSON.stringify(data);
+      throw new Error(`HTTP ${response.status} — ${apiMsg}`);
+    }
+    if(data.error){
+      throw new Error(data.error.message || JSON.stringify(data.error));
+    }
+    return data;
+  }
+
+  try {
+    let data;
+    try {
+      data = await callApi();
+    } catch(firstErr){
+      // one retry for transient server-side errors
+      const transient = /internal server error|timeout|overloaded|5\d\d/i.test(firstErr.message || '');
+      if(transient){
+        await new Promise(r => setTimeout(r, 1200));
+        data = await callApi();
+      } else {
+        throw firstErr;
+      }
+    }
+
+    let text = (data.content || []).map(b => b.text || "").join("\n").trim();
+    text = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+
+    let parsed;
+    try { parsed = JSON.parse(text); }
+    catch(e){ throw new Error("Got a response but couldn't parse it as JSON. Try a clearer photo, or scan again."); }
+
+    lastResult = parsed;
+    renderResult(parsed);
+    saveRow.style.display = 'flex';
+  } catch(err) {
+    scanningBox.style.display = 'none';
+    errorBox.style.display = 'block';
+    errorBox.textContent = "Scan failed: " + (err.message || "unknown error") + ". Tap Scan Photo to try again — if it keeps failing, try a smaller/clearer photo.";
+    analyzeRow.style.display = 'flex';
+  }
+};
+
+function renderResult(r){
+  scanningBox.style.display = 'none';
+  const riskClass = r.risk_level === 'high' ? 'risk-high' : (r.risk_level === 'elevated' ? 'risk-elevated' : 'risk-low');
+  const riskLabel = r.risk_level === 'high' ? 'High Risk Indicators' : (r.risk_level === 'elevated' ? 'Elevated Risk Indicators' : 'Low Visible Risk');
+
+  const findingsHtml = (r.findings && r.findings.length)
+    ? r.findings.map(f => {
+        const dotClass = f.severity === 'high' ? 'high' : (f.severity === 'elevated' ? 'elevated' : 'note');
+        const cat = f.category ? `<span class="finding-tag">${escapeHtml(f.category)}</span>` : '';
+        return `<div class="finding"><div class="fdot ${dotClass}"></div><div class="finding-text">${cat}${escapeHtml(f.text)}</div></div>`;
+      }).join('')
+    : `<div class="finding-text" style="padding:8px 0;color:var(--text-dim);font-style:italic;">No specific findings returned.</div>`;
+
+  const qualityNote = r.image_quality_note
+    ? `<div class="cta-strip" style="margin-top:10px;"><b>Image note:</b> ${escapeHtml(r.image_quality_note)}</div>` : '';
+
+  let ctaText;
+  if(r.risk_level === 'high'){
+    ctaText = `<b>Treat as a stop point.</b> Confirm with earth loop impedance / insulation resistance / RCD trip-time testing before returning the board to service.`;
+  } else if(r.risk_level === 'elevated'){
+    ctaText = `<b>Verify with instruments</b> before sign-off — these are visual flags only, not test results.`;
+  } else {
+    ctaText = `<b>No visible flags</b> — confirm with your standard test sequence as usual; this doesn't replace instrument readings.`;
+  }
+
+  resultTag.style.display = 'block';
+  resultTag.innerHTML = `
+    <div class="tag">
+      <div class="tag-head">
+        <span class="risk-badge ${riskClass}">${riskLabel}</span>
+        <span class="stamp">SCAN · ${new Date().toLocaleString()}</span>
+      </div>
+      <div class="tag-body">
+        <p class="summary">${escapeHtml(r.summary || '')}</p>
+        <div class="section-label">Visible Indicators — AS/NZS 3000 Categories</div>
+        ${findingsHtml}
+        ${qualityNote}
+        <div class="cta-strip">${ctaText}</div>
+      </div>
+    </div>
+  `;
+}
+
+// ---------- save entry ----------
+saveEntryBtn.onclick = async () => {
+  if(!lastResult || !photos.length) return;
+  saveEntryBtn.disabled = true;
+  saveEntryBtn.textContent = 'Saving…';
+  try{
+    const entry = {
+      id: 'e' + Date.now(),
+      dateTime: new Date().toISOString(),
+      jobRef: document.getElementById('jobRef').value.trim(),
+      boardId: document.getElementById('boardId').value.trim(),
+      inspector: document.getElementById('inspector').value.trim(),
+      photos: photos.map(p => ({ label: p.label, dataUrl: p.dataUrl })),
+      riskLevel: lastResult.risk_level,
+      summary: lastResult.summary,
+      findings: lastResult.findings || [],
+      imageQualityNote: lastResult.image_quality_note || null
+    };
+
+    let list = [];
+    try{
+      const res = await localStore.get(STORAGE_KEY);
+      if(res && res.value) list = JSON.parse(res.value);
+    }catch(e){ list = []; }
+
+    list.unshift(entry);
+    const result = await localStore.set(STORAGE_KEY, JSON.stringify(list));
+    if(!result) throw new Error('Storage did not confirm save');
+
+    await saveDefaults();
+    showToast('Saved to inspection log');
+    resetCapture();
+    resetFormFields(false);
+  }catch(err){
+    showToast('Save failed — try again');
+  }finally{
+    saveEntryBtn.disabled = false;
+    saveEntryBtn.textContent = 'Save to Log';
+  }
+};
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ---------- log view ----------
+async function getEntries(){
+  try{
+    const res = await localStore.get(STORAGE_KEY);
+    if(res && res.value) return JSON.parse(res.value);
+    return [];
+  }catch(e){ return []; }
+}
+
+async function renderLog(){
+  const listEl = document.getElementById('logList');
+  listEl.innerHTML = `<div class="log-empty">Loading…</div>`;
+  const entries = await getEntries();
+  document.getElementById('logCount').textContent = entries.length ? `(${entries.length})` : '';
+
+  const filterVal = document.getElementById('logSearch').value.trim().toLowerCase();
+  const filtered = filterVal
+    ? entries.filter(e => [e.jobRef, e.boardId, e.inspector].join(' ').toLowerCase().includes(filterVal))
+    : entries;
+
+  if(!filtered.length){
+    listEl.innerHTML = `<div class="log-empty">${entries.length ? 'No matching entries.' : 'No saved scans yet.'}</div>`;
+    return;
+  }
+
+  listEl.innerHTML = '';
+  filtered.forEach(entry => {
+    const riskClass = entry.riskLevel === 'high' ? 'risk-high' : (entry.riskLevel === 'elevated' ? 'risk-elevated' : 'risk-low');
+    const riskLabel = entry.riskLevel === 'high' ? 'High' : (entry.riskLevel === 'elevated' ? 'Elevated' : 'Low');
+    const dt = new Date(entry.dateTime);
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    div.innerHTML = `
+      <div class="log-entry-head">
+        <div>
+          <div class="log-entry-title">${escapeHtml(entry.jobRef || 'No job ref')} — ${escapeHtml(entry.boardId || 'Unnamed board')}</div>
+          <div class="log-entry-meta">${dt.toLocaleDateString()} ${dt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} · ${escapeHtml(entry.inspector || 'No inspector recorded')}</div>
+        </div>
+        <span class="risk-badge ${riskClass}">${riskLabel}</span>
+      </div>
+      <div class="log-entry-summary">${escapeHtml(entry.summary || '')}</div>
+      <div class="log-entry-expand">
+        <div class="log-photo-gallery">
+          ${(entry.photos || []).map(p => `
+            <div class="log-photo-item">
+              <img src="${p.dataUrl}" alt="${p.label} switchboard photo">
+              ${p.label !== 'other' ? `<span class="photo-chip ${p.label}">${p.label}</span>` : ''}
+            </div>
+          `).join('')}
+        </div>
+        <div class="section-label">Findings</div>
+        ${(entry.findings || []).map(f => {
+          const dotClass = f.severity === 'high' ? 'high' : (f.severity === 'elevated' ? 'elevated' : 'note');
+          const cat = f.category ? `<span class="finding-tag">${escapeHtml(f.category)}</span>` : '';
+          return `<div class="finding"><div class="fdot ${dotClass}"></div><div class="finding-text">${cat}${escapeHtml(f.text)}</div></div>`;
+        }).join('') || '<div class="finding-text" style="color:var(--text-dim);font-style:italic;padding:6px 0;">No findings recorded.</div>'}
+        <div class="log-entry-actions">
+          <button class="btn-secondary" data-action="copy" data-id="${entry.id}">Copy Report Text</button>
+          <button class="btn-danger" data-action="delete" data-id="${entry.id}">Delete</button>
+        </div>
+      </div>
+    `;
+    div.addEventListener('click', (ev) => {
+      if(ev.target.closest('button')) return;
+      div.classList.toggle('expanded');
+    });
+    listEl.appendChild(div);
+  });
+
+  listEl.querySelectorAll('button[data-action="delete"]').forEach(btn => {
+    btn.onclick = async (ev) => {
+      ev.stopPropagation();
+      const id = btn.dataset.id;
+      try{
+        let list = await getEntries();
+        list = list.filter(e => e.id !== id);
+        await localStore.set(STORAGE_KEY, JSON.stringify(list));
+        showToast('Entry deleted');
+        renderLog();
+      }catch(e){ showToast('Delete failed'); }
+    };
+  });
+
+  listEl.querySelectorAll('button[data-action="copy"]').forEach(btn => {
+    btn.onclick = async (ev) => {
+      ev.stopPropagation();
+      const id = btn.dataset.id;
+      const list = await getEntries();
+      const entry = list.find(e => e.id === id);
+      if(!entry) return;
+      const txt = formatEntryText(entry);
+      try{
+        await navigator.clipboard.writeText(txt);
+        showToast('Report text copied');
+      }catch(e){
+        showToast('Copy not available here');
+      }
+    };
+  });
+}
+
+function formatEntryText(entry){
+  const dt = new Date(entry.dateTime);
+  const photos = entry.photos || [];
+  const extCount = photos.filter(p => p.label === 'external').length;
+  const intCount = photos.filter(p => p.label === 'internal').length;
+  const otherCount = photos.length - extCount - intCount;
+  let photoLine = `${photos.length} photo(s) — ${extCount} external, ${intCount} internal`;
+  if(otherCount) photoLine += `, ${otherCount} unlabelled`;
+
+  let lines = [
+    `TOUCHTRACE — Field Scan Note`,
+    `Job/Site Ref: ${entry.jobRef || '-'}`,
+    `Board/Location: ${entry.boardId || '-'}`,
+    `Inspector: ${entry.inspector || '-'}`,
+    `Date/Time: ${dt.toLocaleString()}`,
+    `Photos: ${photoLine}`,
+    `Risk Level: ${(entry.riskLevel || '-').toUpperCase()}`,
+    ``,
+    `Summary: ${entry.summary || '-'}`,
+    ``,
+    `Findings (AS/NZS 3000 categories):`
+  ];
+  (entry.findings || []).forEach(f => {
+    lines.push(`- [${(f.severity||'note').toUpperCase()}] ${f.category ? f.category + ': ' : ''}${f.text}`);
+  });
+  if(entry.imageQualityNote) lines.push(``, `Image note: ${entry.imageQualityNote}`);
+  lines.push(``, `Note: visual scan only — confirm against instrument test results before sign-off.`);
+  return lines.join('\n');
+}
+
+document.getElementById('logSearch').oninput = () => renderLog();
+
+document.getElementById('exportAllBtn').onclick = async () => {
+  const entries = await getEntries();
+  if(!entries.length){ showToast('No entries to export'); return; }
+  const text = entries.map(formatEntryText).join('\n\n' + '-'.repeat(40) + '\n\n');
+  try{
+    await navigator.clipboard.writeText(text);
+    showToast('Full log copied to clipboard');
+  }catch(e){
+    showToast('Clipboard unavailable — try individual copy');
+  }
+};
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str == null ? '' : String(str);
+  return d.innerHTML;
+}
+</script>
+</body>
+</html>
