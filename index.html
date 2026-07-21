@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <pattern id="hazardWeave" width="14" height="14" patternTransform="rotate(135)" patternUnits="userSpaceOnUse">
+      <rect width="14" height="14" fill="#14171a"/>
+      <rect width="2" height="14" fill="#f2c94c" opacity="0.05"/>
+    </pattern>
+  </defs>
+
+  <!-- badge background -->
+  <rect x="4" y="4" width="192" height="192" rx="38" fill="url(#hazardWeave)"/>
+  <rect x="4" y="4" width="192" height="192" rx="38" fill="none" stroke="#f2c94c" stroke-width="7"/>
+
+  <!-- pulse rings radiating from touch point -->
+  <path d="M 58 116 A 26 26 0 0 1 84 142" fill="none" stroke="#f2c94c" stroke-width="7" stroke-linecap="round" opacity="0.95"/>
+  <path d="M 58 96 A 46 46 0 0 1 104 142" fill="none" stroke="#f2c94c" stroke-width="7" stroke-linecap="round" opacity="0.65"/>
+  <path d="M 58 76 A 66 66 0 0 1 124 142" fill="none" stroke="#f2c94c" stroke-width="7" stroke-linecap="round" opacity="0.35"/>
+
+  <!-- trace line escaping the touch point -->
+  <polyline points="58,142 92,108 78,100 118,58 104,52 146,18"
+            fill="none" stroke="#52c9a8" stroke-width="8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- touch point -->
+  <circle cx="58" cy="142" r="9" fill="#f2c94c"/>
+  <circle cx="58" cy="142" r="9" fill="none" stroke="#14171a" stroke-width="2"/>
+</svg>
