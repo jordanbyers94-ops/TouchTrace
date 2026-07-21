@@ -273,15 +273,15 @@
     </div>
 
     <div id="errorBox" style="display:none;" class="error-box"></div>
-    <div id="debugRow" style="margin-top:10px;">
-      <button class="btn-secondary" id="testConnBtn" style="width:100%;">Test API Connection (no image)</button>
-    </div>
 
     <div id="resultTag" style="display:none;"></div>
 
-    <div class="btn-row" id="saveRow" style="display:none;">
-      <button class="btn-primary" id="saveEntryBtn">Save to Log</button>
-      <button class="btn-secondary" id="discardBtn">New Scan</button>
+    <div class="btn-row" id="saveRow" style="display:none;flex-direction:column;">
+      <button class="btn-primary" id="saveEntryBtn" style="width:100%;">Save to Log</button>
+      <div class="btn-row" style="margin-top:0;">
+        <button class="btn-secondary" id="downloadReportBtn">Download Report</button>
+        <button class="btn-secondary" id="discardBtn">New Scan</button>
+      </div>
     </div>
   </div>
 
@@ -289,7 +289,7 @@
   <div class="view" id="logView">
     <div class="log-toolbar">
       <input type="text" id="logSearch" placeholder="Filter by job ref, board, or inspector">
-      <button class="btn-secondary" id="exportAllBtn" style="flex:none;padding:9px 12px;">Export</button>
+      <button class="btn-secondary" id="exportAllBtn" style="flex:none;padding:9px 12px;">Download All</button>
     </div>
     <div id="logList"></div>
   </div>
@@ -402,6 +402,7 @@ const errorBox = document.getElementById('errorBox');
 const resultTag = document.getElementById('resultTag');
 const saveRow = document.getElementById('saveRow');
 const saveEntryBtn = document.getElementById('saveEntryBtn');
+const downloadReportBtn = document.getElementById('downloadReportBtn');
 const discardBtn = document.getElementById('discardBtn');
 
 let photos = []; // { id, label: 'external'|'internal'|'other', dataUrl, base64, mediaType }
@@ -512,55 +513,6 @@ function renderPhotoGrid(){
   if(addMore) addMore.onclick = () => { pendingLabel = 'other'; fileInput.click(); };
 }
 renderPhotoGrid();
-
-document.getElementById('testConnBtn').onclick = async () => {
-  const btn = document.getElementById('testConnBtn');
-  const box = document.getElementById('errorBox');
-  btn.disabled = true;
-  btn.textContent = 'Testing…';
-  box.style.display = 'none';
-  try {
-    const response = await fetch(getProxyUrl(), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-app-token": getAppToken()
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-5",
-        max_tokens: 20,
-        messages: [{ role: "user", content: "Reply with the single word: OK" }]
-      })
-    });
-    const raw = await response.text();
-    let parsed;
-    try { parsed = JSON.parse(raw); } catch(e){ parsed = null; }
-
-    box.style.display = 'block';
-    if(response.ok && parsed && parsed.content){
-      const reply = parsed.content.map(b => b.text || '').join('');
-      box.style.background = '#182a1f';
-      box.style.borderColor = 'var(--safe)';
-      box.style.color = '#a8e6cf';
-      box.textContent = `Connection OK (HTTP ${response.status}). Model replied: "${reply.trim()}". So the API connection itself works — the image-scan failure is likely about payload size or the JSON schema, not connectivity. Try scanning again, or try a smaller photo.`;
-    } else {
-      box.style.background = '#2a1a18';
-      box.style.borderColor = 'var(--danger)';
-      box.style.color = '#f0b3a8';
-      const detail = parsed ? JSON.stringify(parsed) : raw.slice(0, 300);
-      box.textContent = `Connection test failed (HTTP ${response.status}). Raw response: ${detail}`;
-    }
-  } catch(err) {
-    box.style.display = 'block';
-    box.style.background = '#2a1a18';
-    box.style.borderColor = 'var(--danger)';
-    box.style.color = '#f0b3a8';
-    box.textContent = `Connection test threw an error: ${err.message}. This points to a network/fetch-level problem rather than the API itself.`;
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Test API Connection (no image)';
-  }
-};
 
 analyzeBtn.onclick = async () => {
   if(!photos.length) return;
@@ -813,7 +765,8 @@ async function renderLog(){
           return `<div class="finding"><div class="fdot ${dotClass}"></div><div class="finding-text">${cat}${escapeHtml(f.text)}</div></div>`;
         }).join('') || '<div class="finding-text" style="color:var(--text-dim);font-style:italic;padding:6px 0;">No findings recorded.</div>'}
         <div class="log-entry-actions">
-          <button class="btn-secondary" data-action="copy" data-id="${entry.id}">Copy Report Text</button>
+          <button class="btn-primary" data-action="download" data-id="${entry.id}">Download</button>
+          <button class="btn-secondary" data-action="copy" data-id="${entry.id}">Copy</button>
           <button class="btn-danger" data-action="delete" data-id="${entry.id}">Delete</button>
         </div>
       </div>
@@ -855,6 +808,20 @@ async function renderLog(){
       }
     };
   });
+
+  listEl.querySelectorAll('button[data-action="download"]').forEach(btn => {
+    btn.onclick = async (ev) => {
+      ev.stopPropagation();
+      const id = btn.dataset.id;
+      const list = await getEntries();
+      const entry = list.find(e => e.id === id);
+      if(!entry) return;
+      const dt = new Date(entry.dateTime);
+      const filename = `touchtrace_${safeFileSlug(entry.jobRef)}_${safeFileSlug(entry.boardId)}_${dt.toISOString().slice(0,10)}.html`;
+      downloadHtmlFile(filename, buildReportHtml(entry));
+      showToast('Report downloaded (with photos)');
+    };
+  });
 }
 
 function formatEntryText(entry){
@@ -887,19 +854,162 @@ function formatEntryText(entry){
   return lines.join('\n');
 }
 
+// ---------- HTML report (photos need HTML — plain text can't hold images) ----------
+const REPORT_STYLE = `
+  body{font-family:'IBM Plex Sans',Arial,sans-serif;background:#14171a;color:#ececea;margin:0;padding:24px;}
+  .report{max-width:760px;margin:0 auto;}
+  .rhead{display:flex;justify-content:space-between;align-items:baseline;border-bottom:3px solid #f2c94c;padding-bottom:12px;margin-bottom:20px;}
+  .rhead h1{font-family:Oswald,Arial,sans-serif;font-size:22px;letter-spacing:0.04em;margin:0;text-transform:uppercase;}
+  .rhead .sub{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9aa0a6;letter-spacing:0.06em;}
+  .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;font-size:13px;margin-bottom:18px;}
+  .meta div b{color:#9aa0a6;font-weight:500;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;display:block;margin-bottom:2px;}
+  .risk{display:inline-block;font-family:Oswald,Arial,sans-serif;font-weight:700;font-size:13px;letter-spacing:0.05em;text-transform:uppercase;padding:6px 12px;border-radius:3px;margin-bottom:16px;}
+  .risk-high{background:#e0523f;color:#fff;}
+  .risk-elevated{background:#f2c94c;color:#1a1a1a;}
+  .risk-low{background:#52c9a8;color:#0d211c;}
+  .section-label{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.09em;text-transform:uppercase;color:#9aa0a6;margin:22px 0 10px;padding-bottom:5px;border-bottom:1px solid #33393f;}
+  .summary{font-size:14px;line-height:1.6;}
+  .finding{display:flex;gap:9px;padding:9px 0;border-bottom:1px solid #262b30;font-size:13px;line-height:1.5;}
+  .fdot{flex:none;width:8px;height:8px;border-radius:50%;margin-top:5px;}
+  .fdot.high{background:#e0523f;}
+  .fdot.elevated{background:#f2c94c;}
+  .fdot.note{background:#9aa0a6;}
+  .finding-tag{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#9aa0a6;text-transform:uppercase;margin-right:6px;}
+  .photo-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .photo-card{border:1px solid #33393f;border-radius:6px;overflow:hidden;background:#1c2024;}
+  .photo-card img{width:100%;display:block;}
+  .photo-cap{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:#9aa0a6;padding:6px 8px;}
+  .note-strip{margin-top:20px;background:#23282d;border-radius:4px;padding:12px 14px;font-size:12px;color:#9aa0a6;line-height:1.5;}
+  .entry-sep{border:none;border-top:2px dashed #33393f;margin:36px 0;}
+  @media print{
+    body{background:#fff;color:#111;}
+    .rhead{border-color:#111;}
+    .photo-card{border-color:#ccc;background:#fafafa;}
+    .note-strip{background:#f2f2f2;color:#333;}
+    .finding{border-color:#ddd;}
+    .entry-sep{border-top-color:#ccc;page-break-after:always;}
+  }
+`;
+
+function buildReportSection(entry){
+  const dt = new Date(entry.dateTime);
+  const riskClass = entry.riskLevel === 'high' ? 'risk-high' : (entry.riskLevel === 'elevated' ? 'risk-elevated' : 'risk-low');
+  const riskLabel = (entry.riskLevel || '-').toUpperCase();
+
+  const findingsHtml = (entry.findings && entry.findings.length)
+    ? entry.findings.map(f => {
+        const dotClass = f.severity === 'high' ? 'high' : (f.severity === 'elevated' ? 'elevated' : 'note');
+        const cat = f.category ? `<span class="finding-tag">${escapeHtml(f.category)}</span>` : '';
+        return `<div class="finding"><div class="fdot ${dotClass}"></div><div>${cat}${escapeHtml(f.text)}</div></div>`;
+      }).join('')
+    : `<div style="font-size:13px;color:#9aa0a6;font-style:italic;padding:6px 0;">No findings recorded.</div>`;
+
+  const photosHtml = (entry.photos && entry.photos.length)
+    ? `<div class="section-label">Photos</div><div class="photo-grid">${
+        entry.photos.map(p => `
+          <div class="photo-card">
+            <img src="${p.dataUrl}" alt="${escapeHtml(p.label || 'photo')} switchboard photo">
+            <div class="photo-cap">${escapeHtml(p.label || 'photo')}</div>
+          </div>
+        `).join('')
+      }</div>`
+    : '';
+
+  const qualityNote = entry.imageQualityNote
+    ? `<div class="note-strip"><b>Image note:</b> ${escapeHtml(entry.imageQualityNote)}</div>` : '';
+
+  return `
+    <div class="rhead">
+      <h1>Touchtrace</h1>
+      <div class="sub">Switchboard Field Scan · AS/NZS 3000 Reference</div>
+    </div>
+    <div class="meta">
+      <div><b>Job / Site Ref</b>${escapeHtml(entry.jobRef || '-')}</div>
+      <div><b>Board / Location</b>${escapeHtml(entry.boardId || '-')}</div>
+      <div><b>Inspector</b>${escapeHtml(entry.inspector || '-')}</div>
+      <div><b>Date / Time</b>${dt.toLocaleString()}</div>
+    </div>
+    <span class="risk ${riskClass}">${riskLabel} RISK</span>
+    <div class="summary">${escapeHtml(entry.summary || '')}</div>
+    ${photosHtml}
+    <div class="section-label">Findings — AS/NZS 3000 Categories</div>
+    ${findingsHtml}
+    ${qualityNote}
+    <div class="note-strip">Visual scan only — confirm against instrument test results (earth loop impedance, insulation resistance, RCD trip time) before sign-off.</div>
+  `;
+}
+
+function buildReportHtml(entries){
+  const list = Array.isArray(entries) ? entries : [entries];
+  const body = list.map(buildReportSection).join('<hr class="entry-sep">');
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>TouchTrace Report</title>
+<style>${REPORT_STYLE}</style>
+</head><body><div class="report">${body}</div></body></html>`;
+}
+
+// ---------- file download ----------
+function downloadTextFile(filename, text){
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadHtmlFile(filename, html){
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function safeFileSlug(str){
+  return (str || '').trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '') || 'untitled';
+}
+
+function buildPendingEntry(){
+  return {
+    dateTime: new Date().toISOString(),
+    jobRef: document.getElementById('jobRef').value.trim(),
+    boardId: document.getElementById('boardId').value.trim(),
+    inspector: document.getElementById('inspector').value.trim(),
+    photos: photos.map(p => ({ label: p.label, dataUrl: p.dataUrl })),
+    riskLevel: lastResult ? lastResult.risk_level : null,
+    summary: lastResult ? lastResult.summary : '',
+    findings: lastResult ? (lastResult.findings || []) : [],
+    imageQualityNote: lastResult ? (lastResult.image_quality_note || null) : null
+  };
+}
+
+downloadReportBtn.onclick = () => {
+  if(!lastResult) return;
+  const entry = buildPendingEntry();
+  const dt = new Date(entry.dateTime);
+  const filename = `touchtrace_${safeFileSlug(entry.jobRef)}_${safeFileSlug(entry.boardId)}_${dt.toISOString().slice(0,10)}.html`;
+  downloadHtmlFile(filename, buildReportHtml(entry));
+  showToast('Report downloaded (with photos)');
+};
+
 document.getElementById('logSearch').oninput = () => renderLog();
 
 document.getElementById('exportAllBtn').onclick = async () => {
   const entries = await getEntries();
   if(!entries.length){ showToast('No entries to export'); return; }
-  const text = entries.map(formatEntryText).join('\n\n' + '-'.repeat(40) + '\n\n');
-  try{
-    await navigator.clipboard.writeText(text);
-    showToast('Full log copied to clipboard');
-  }catch(e){
-    showToast('Clipboard unavailable — try individual copy');
-  }
+  const filename = `touchtrace_log_export_${new Date().toISOString().slice(0,10)}.html`;
+  downloadHtmlFile(filename, buildReportHtml(entries));
+  showToast('Log downloaded (with photos)');
 };
+
 
 function escapeHtml(str){
   const d = document.createElement('div');
