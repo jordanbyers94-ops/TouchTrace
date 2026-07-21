@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -319,39 +320,36 @@ const localStore = {
 };
 
 // ---------- proxy config (app talks to YOUR server, which holds the real Anthropic key) ----------
-const PROXY_URL_STORAGE = 'tt:proxy-url';
+// Since the app and proxy are served from the same domain, default to a relative
+// path — no need to ask for a URL. Only the access token needs entering.
 const APP_TOKEN_STORAGE = 'tt:app-token';
-function getProxyUrl(){ return localStorage.getItem(PROXY_URL_STORAGE) || ''; }
+function getProxyUrl(){ return '/api/scan'; }
 function getAppToken(){ return localStorage.getItem(APP_TOKEN_STORAGE) || ''; }
-function setProxyConfig(url, token){
-  localStorage.setItem(PROXY_URL_STORAGE, url);
+function setAppToken(token){
   localStorage.setItem(APP_TOKEN_STORAGE, token);
 }
 
 function ensureApiKeyBanner(){
-  if(getProxyUrl() && getAppToken()) return;
+  if(getAppToken()) return;
   const banner = document.createElement('div');
   banner.id = 'apiKeyBanner';
   banner.style.cssText = 'position:fixed;inset:0;background:rgba(10,12,14,0.92);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;';
   banner.innerHTML = `
     <div style="max-width:420px;background:#1c2024;border:1px solid #33393f;border-radius:8px;padding:22px;">
-      <div style="font-family:'Oswald',sans-serif;font-size:17px;color:#f2c94c;text-transform:uppercase;letter-spacing:0.03em;margin-bottom:10px;">Connect to Your Team's Server</div>
+      <div style="font-family:'Oswald',sans-serif;font-size:17px;color:#f2c94c;text-transform:uppercase;letter-spacing:0.03em;margin-bottom:10px;">Enter Access Token</div>
       <div style="font-size:13px;line-height:1.6;color:#9aa0a6;margin-bottom:14px;">
-        This app calls your own proxy server, not Anthropic directly — your real API key stays on that server, never in this browser. Ask whoever set up TouchTrace for your team for these two values.
+        This app talks to your own server — your real API key stays there, never in this browser. Enter the access token whoever set this up gave you.
       </div>
-      <label style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#9aa0a6;display:block;margin-bottom:5px;">Proxy URL</label>
-      <input type="text" id="proxyUrlInput" placeholder="https://your-proxy.vercel.app/api/scan" style="width:100%;background:#14171a;border:1px solid #33393f;color:#ececea;padding:10px 11px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:13px;margin-bottom:10px;box-sizing:border-box;">
       <label style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#9aa0a6;display:block;margin-bottom:5px;">Access Token</label>
-      <input type="text" id="appTokenInput" placeholder="shared team access token" style="width:100%;background:#14171a;border:1px solid #33393f;color:#ececea;padding:10px 11px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:13px;margin-bottom:12px;box-sizing:border-box;">
+      <input type="text" id="appTokenInput" placeholder="shared access token" style="width:100%;background:#14171a;border:1px solid #33393f;color:#ececea;padding:10px 11px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:13px;margin-bottom:12px;box-sizing:border-box;">
       <button id="apiKeySaveBtn" style="width:100%;background:#f2c94c;color:#1a1a1a;border:none;border-radius:4px;padding:12px;font-family:'Oswald',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;">Save</button>
     </div>
   `;
   document.body.appendChild(banner);
   document.getElementById('apiKeySaveBtn').onclick = () => {
-    const url = document.getElementById('proxyUrlInput').value.trim();
     const token = document.getElementById('appTokenInput').value.trim();
-    if(!url || !token) return;
-    setProxyConfig(url, token);
+    if(!token) return;
+    setAppToken(token);
     banner.remove();
   };
 }
