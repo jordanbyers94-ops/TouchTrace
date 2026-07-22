@@ -4,6 +4,31 @@ Switchboard field scan tool for licensed electricians, referencing AS/NZS 3000.
 Static app (`index.html`) + a serverless proxy (`api/scan.js`) that keeps your
 real Anthropic API key on the server, never in the browser.
 
+## Features
+
+- **Scan** — photograph a board (external + internal), get an AS/NZS
+  3000-referenced hazard read with editable test-result fields (EFLI, IR, RCD
+  trip time).
+- **Schedule** — photograph the breaker layout, get a draft circuit schedule
+  you can correct and download.
+- **Log** — every saved scan persists to a Postgres database (see setup
+  below) so it survives browser resets and syncs across every device using
+  the same access token. Includes an "Open Defects Only" filter, a
+  Mark Resolved/Open toggle, and a one-tap "Customer Note" that rewrites
+  findings into plain-English language for a non-electrician client.
+- **Offline-tolerant** — installable as a home-screen app; photos and job
+  details autosave locally and survive a refresh or lost signal; saves and
+  deletes queue locally and sync automatically once you're back online.
+  (The AI analysis itself still needs a live connection — there's no way
+  around that part requiring the API.)
+
+## Install as a home-screen app
+
+Once deployed, open the live URL on your phone and use "Add to Home Screen"
+(iOS Safari: Share → Add to Home Screen; Android Chrome: menu → Install app).
+It'll behave like a native app — its own icon, opens without browser chrome,
+and the app shell loads even with no signal.
+
 ## 1. Push this to GitHub
 
 From this folder:
@@ -51,12 +76,22 @@ pick one platform.
 4. In the project's Variables tab, add the same two env vars:
    - `ANTHROPIC_API_KEY`
    - `APP_ACCESS_TOKEN`
-5. Under Settings → Networking, click "Generate Domain" to get a public URL
+5. **Add a database** (needed for the inspection log to persist and sync across
+   devices): in the same Railway project, click **"New"** → **"Database"** →
+   **"Add PostgreSQL"**. Railway automatically sets a `DATABASE_URL` variable
+   on your app service — no manual config needed. The app creates its table
+   on first startup after that.
+6. Under Settings → Networking, click "Generate Domain" to get a public URL
    like `https://touchtrace-production.up.railway.app`.
-6. The app is served at that root URL, and the proxy endpoint is
+7. The app is served at that root URL, and the proxy endpoint is
    `https://touchtrace-production.up.railway.app/api/scan`.
 
 Every `git push` to `main` auto-redeploys here too.
+
+**Without step 5**, the app still runs — scanning, schedules, and reports all
+work — but the inspection log falls back to a local queue that never confirms
+a save (you'll see "Offline — queued" even when connected). Add the database
+whenever you're ready for the log to actually persist.
 
 ## 3. First-run setup in the app
 
